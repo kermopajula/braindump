@@ -1,0 +1,23 @@
+# Xcode
+BrainDump.xcodeproj/
+xcuserdata/
+*.xcworkspace
+DerivedData/
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+
+# Generated
+Info.plist
+
+# Conductor
+.context/
+
+# macOS
+.DS_Store
