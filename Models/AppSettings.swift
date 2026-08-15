@@ -2,21 +2,17 @@ import Foundation
 import SwiftUI
 
 final class AppSettings: ObservableObject {
-    @AppStorage("selectedProvider") private var selectedProviderRaw: String = AIProvider.appleFoundation.rawValue
-    @AppStorage("apiKey") var apiKey: String = ""
     @AppStorage("hasSeenPrivacyNotice") var hasSeenPrivacyNotice: Bool = false
 
-    var selectedProvider: AIProvider {
-        get { AIProvider(rawValue: selectedProviderRaw) ?? .appleFoundation }
-        set { selectedProviderRaw = newValue.rawValue }
+    /// Nil when the on-device model is ready to use, otherwise a user-facing
+    /// explanation of why it isn't.
+    var aiUnavailableMessage: String? {
+        if #available(iOS 26.0, *) {
+            return FoundationModelsClient.availabilityMessage
+        }
+        return "Apple Intelligence requires iOS 26 or later."
     }
 
-    /// True when the selected provider can actually be used right now.
-    /// Apple Intelligence needs no key; external providers need an API key.
-    var isAIReady: Bool {
-        if selectedProvider.requiresAPIKey {
-            return !apiKey.isEmpty
-        }
-        return true
-    }
+    /// True when the on-device model can actually be used right now.
+    var isAIReady: Bool { aiUnavailableMessage == nil }
 }

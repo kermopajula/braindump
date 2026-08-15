@@ -17,35 +17,29 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Provider", selection: $settings.selectedProvider) {
-                        ForEach(AIProvider.allCases) { provider in
-                            Text(provider.displayName).tag(provider)
-                        }
+                    HStack {
+                        Text("Model")
+                        Spacer()
+                        Text("Apple Intelligence")
+                            .foregroundColor(.secondary)
                     }
 
-                    if settings.selectedProvider.requiresAPIKey {
-                        SecureField("API Key", text: $settings.apiKey)
-                            .textContentType(.password)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-
-                        Button {
-                            testConnection()
-                        } label: {
-                            HStack {
-                                Text("Test Connection")
-                                if isTesting {
-                                    Spacer()
-                                    ProgressView()
-                                }
+                    Button {
+                        testModel()
+                    } label: {
+                        HStack {
+                            Text("Test On-Device Model")
+                            if isTesting {
+                                Spacer()
+                                ProgressView()
                             }
                         }
-                        .disabled(!settings.isAIReady || isTesting)
                     }
+                    .disabled(!settings.isAIReady || isTesting)
                 } header: {
-                    Text("AI Provider")
+                    Text("AI")
                 } footer: {
-                    Text(providerFooter)
+                    Text(aiFooter)
                         .font(.caption)
                 }
 
@@ -107,7 +101,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .alert("Connection Test", isPresented: $showTestResult) {
+            .alert("Model Test", isPresented: $showTestResult) {
                 Button("OK") {}
             } message: {
                 Text(testResultMessage)
@@ -131,37 +125,28 @@ struct SettingsView: View {
         }
     }
 
-    private var providerFooter: String {
-        switch settings.selectedProvider {
-        case .appleFoundation:
-            if #available(iOS 26.0, *) {
-                if let issue = FoundationModelsClient.availabilityMessage {
-                    return "\(issue) Pick OpenAI or Anthropic and add an API key for cloud AI."
-                }
-                return "Runs on your device using Apple Intelligence — free, private, no API key. If you want a more capable model for complex questions, switch to OpenAI or Anthropic and add your own API key."
-            } else {
-                return "Apple Intelligence requires iOS 26 or later. Pick OpenAI or Anthropic and add an API key."
-            }
-        case .openAI, .anthropic:
-            return "Your key is stored only on this device and used to call \(settings.selectedProvider.displayName) directly. You're billed by the provider for usage."
+    private var aiFooter: String {
+        if let issue = settings.aiUnavailableMessage {
+            return issue
         }
+        return "Runs on your device using Apple Intelligence — free, private, no API key. Your knowledge never leaves your device."
     }
 
-    private func testConnection() {
+    private func testModel() {
         isTesting = true
         Task {
             do {
-                let service = AIServiceFactory.create(provider: settings.selectedProvider, apiKey: settings.apiKey)
+                let service = AIServiceFactory.create()
                 let testEntries = [KnowledgeEntry(title: "Test", content: "This is a test entry.")]
                 let response = try await service.ask(question: "What is the test entry about?", context: testEntries)
                 await MainActor.run {
-                    testResultMessage = "Connection successful!\n\nResponse: \(response.answer)"
+                    testResultMessage = "The on-device model is working.\n\nResponse: \(response.answer)"
                     showTestResult = true
                     isTesting = false
                 }
             } catch {
                 await MainActor.run {
-                    testResultMessage = "Connection failed: \(error.localizedDescription)"
+                    testResultMessage = "Test failed: \(error.localizedDescription)"
                     showTestResult = true
                     isTesting = false
                 }

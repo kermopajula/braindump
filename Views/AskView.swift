@@ -18,10 +18,10 @@ struct AskView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     inputCard
 
-                    if !settings.isAIReady {
+                    if let issue = settings.aiUnavailableMessage {
                         infoBanner(
                             icon: "exclamationmark.triangle.fill",
-                            text: "Add your API key in Settings to use the Ask feature.",
+                            text: issue,
                             tint: .orange
                         )
                     }
@@ -212,7 +212,7 @@ struct AskView: View {
 
         Task {
             do {
-                let service = AIServiceFactory.create(provider: settings.selectedProvider, apiKey: settings.apiKey)
+                let service = AIServiceFactory.create()
 
                 // Use relevant entries (search-based) to stay within context limits
                 let context: [KnowledgeEntry]

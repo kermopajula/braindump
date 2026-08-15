@@ -200,14 +200,14 @@ struct AddKnowledgeView: View {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        // Use AI to process the entry when a provider is ready (Apple Intelligence
-        // needs no key; external providers need one).
+        // Use AI to structure the entry when the on-device model is available;
+        // otherwise fall back to saving the raw text.
         if settings.isAIReady {
             isProcessing = true
             errorMessage = nil
             Task {
                 do {
-                    let service = AIServiceFactory.create(provider: settings.selectedProvider, apiKey: settings.apiKey)
+                    let service = AIServiceFactory.create()
                     let processed = try await service.processNewEntry(rawText: text, existingEntries: store.entries)
 
                     await MainActor.run {

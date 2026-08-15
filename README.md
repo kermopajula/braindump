@@ -13,24 +13,18 @@ Everything is stored locally on your device. There is no account, no server, and
 - **Search and browse** — word-scored search over titles, content, and tags.
 - **Import / export** — plain-text round-trip of the whole knowledge base.
 
-## AI providers
+## AI
 
-Pick a provider in **Settings → AI Provider**:
+All AI runs on-device via Apple's [Foundation Models framework](https://developer.apple.com/documentation/foundationmodels) — no API key, no account, no network calls. Structured results come back through `@Generable` types rather than JSON parsing.
 
-| Provider | Model | API key | Data leaves device |
-|---|---|---|---|
-| Apple Intelligence | On-device Foundation Model | Not needed | No |
-| OpenAI | `gpt-4o` | Required | Yes |
-| Anthropic | `claude-sonnet-4-20250514` | Required | Yes |
+This requires **iOS 26 or later** on an Apple Intelligence–capable device with the feature enabled. When it isn't available, the app says why (device not eligible, Apple Intelligence turned off, model still downloading) and falls back to saving entries without AI structuring. **Settings → AI → Test On-Device Model** runs a quick round-trip to confirm it's working.
 
-**Apple Intelligence** is the default and runs entirely on-device via the [Foundation Models framework](https://developer.apple.com/documentation/foundationmodels). It requires iOS 26 or later on an Apple Intelligence–capable device with the feature enabled; the app surfaces a clear message when it isn't available.
-
-The **OpenAI** and **Anthropic** providers send your question along with the relevant knowledge base entries to that provider's API. Use them only if you're comfortable with that.
+There are no cloud providers. The `AIService` protocol keeps the door open for adding one later, but nothing in the app talks to a remote API today.
 
 ## Requirements
 
 - Xcode 26
-- iOS 17.0+ to build and run (iOS 26+ for the Apple Intelligence provider)
+- iOS 17.0+ to build and run (iOS 26+ for any of the AI features)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 
 ## Building
@@ -53,28 +47,22 @@ BrainDumpApp.swift        App entry point
 ContentView.swift         Tab shell: Add / Knowledge / Ask / Settings
 Models/
   KnowledgeEntry.swift    The stored entry type
-  AIProvider.swift        Provider enum and model names
-  AppSettings.swift       Persisted user settings
+  AppSettings.swift       Persisted settings and on-device AI availability
 Services/
-  AIService.swift         Provider-agnostic protocol, shared prompts, response parsing
+  AIService.swift         AI protocol, shared prompts, errors
   FoundationModelsClient.swift  On-device Apple Intelligence client
-  OpenAIClient.swift      OpenAI provider
-  AnthropicClient.swift   Anthropic provider
   KnowledgeStore.swift    JSON-file persistence, search, import/export
   SpeechRecognizer.swift  Speech-to-text
   ImportExportService.swift
 Views/                    SwiftUI screens and components
 ```
 
-All three AI clients implement the same `AIService` protocol and share prompt construction, so adding a provider means writing one client and one enum case.
-
 ## Data and privacy
 
 - Entries live in a single `knowledge.json` file in the app's Documents directory. Deleting the app deletes them.
-- Nothing is uploaded anywhere unless you choose OpenAI or Anthropic as your provider.
-- API keys are stored in `UserDefaults` via `@AppStorage`, not the Keychain.
-- No analytics, no tracking, no third-party SDKs.
+- Nothing is uploaded anywhere. The app makes no network requests at all.
+- No accounts, no API keys, no analytics, no tracking, no third-party SDKs.
 
 ## License
 
-No license has been chosen yet — all rights reserved until one is added.
+MIT — see [LICENSE](LICENSE).

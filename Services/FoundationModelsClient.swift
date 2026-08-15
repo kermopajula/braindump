@@ -53,7 +53,7 @@ final class FoundationModelsClient: AIService {
             }
             return AIResponse(answer: raw.answer, suggestedUpdates: updates)
         } catch {
-            throw AIError.networkError(error)
+            throw AIError.generationFailed(error)
         }
     }
 
@@ -79,7 +79,7 @@ final class FoundationModelsClient: AIService {
                 matchingEntryID: matchingID
             )
         } catch {
-            throw AIError.networkError(error)
+            throw AIError.generationFailed(error)
         }
     }
 

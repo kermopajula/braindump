@@ -38,14 +38,8 @@ struct PrivacyNoticeView: View {
 
                         privacyItem(
                             icon: "brain.head.profile",
-                            title: "On-Device AI by Default",
-                            description: "BrainDump uses Apple Intelligence's on-device model by default. Your knowledge never leaves your device when answering questions, and no API key is required."
-                        )
-
-                        privacyItem(
-                            icon: "key",
-                            title: "Optional Cloud Providers",
-                            description: "If you want a more capable model, you can switch to OpenAI or Anthropic in Settings and add your own API key. Your key is stored only on this device. When you use the Ask feature with a cloud provider, your knowledge base entries are sent to that provider to generate the answer."
+                            title: "On-Device AI",
+                            description: "BrainDump uses Apple Intelligence's on-device model. Your knowledge never leaves your device when answering questions, and no API key is required."
                         )
 
                         privacyItem(
