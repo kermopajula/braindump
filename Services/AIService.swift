@@ -31,6 +31,8 @@ enum AIError: LocalizedError {
     case invalidResponse(Int)
     case decodingError(String)
     case networkError(Error)
+    case foundationModelsUnavailable(String)
+    case providerUnsupportedOnThisOS
 
     var errorDescription: String? {
         switch self {
@@ -42,6 +44,10 @@ enum AIError: LocalizedError {
             return "Failed to parse AI response: \(msg)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .foundationModelsUnavailable(let message):
+            return message
+        case .providerUnsupportedOnThisOS:
+            return "Apple Intelligence requires iOS 26 or later. Choose another provider in Settings."
         }
     }
 }
@@ -49,11 +55,26 @@ enum AIError: LocalizedError {
 enum AIServiceFactory {
     static func create(provider: AIProvider, apiKey: String) -> AIService {
         switch provider {
+        case .appleFoundation:
+            if #available(iOS 26.0, macOS 26.0, *) {
+                return FoundationModelsClient()
+            }
+            return UnsupportedProviderClient()
         case .openAI:
             return OpenAIClient(apiKey: apiKey)
         case .anthropic:
             return AnthropicClient(apiKey: apiKey)
         }
+    }
+}
+
+/// Stand-in used when the user picked Apple Intelligence on an OS that's too old to support it.
+private struct UnsupportedProviderClient: AIService {
+    func ask(question: String, context: [KnowledgeEntry]) async throws -> AIResponse {
+        throw AIError.providerUnsupportedOnThisOS
+    }
+    func processNewEntry(rawText: String, existingEntries: [KnowledgeEntry]) async throws -> ProcessedEntry {
+        throw AIError.providerUnsupportedOnThisOS
     }
 }
 
@@ -106,12 +127,19 @@ enum AIPrompts {
     static let processEntrySystemPrompt = """
     You help organize personal knowledge. Given raw text input, extract a structured knowledge entry.
 
+    Rules for matchingEntryTitle:
+    - Set it ONLY when the new input is about the exact same specific subject as an existing entry \
+    (e.g. updating the location of the SAME item, correcting the SAME measurement, revising the SAME instructions).
+    - A shared category or structural pattern is NOT a match. "Key is in the drawer" and "Charger is in the kitchen" \
+    are both item locations but are about different items — return null.
+    - When in doubt, return null. It is far better to create a new entry than to overwrite an unrelated one.
+
     Respond in JSON format:
     {
       "title": "A short descriptive title",
       "content": "The cleaned-up information",
       "tags": ["relevant", "tags"],
-      "matchingEntryTitle": "title of existing entry this updates, or null"
+      "matchingEntryTitle": "exact title of existing entry this updates, or null"
     }
     """
 

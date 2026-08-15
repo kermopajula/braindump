@@ -4,6 +4,7 @@ struct AskView: View {
     @EnvironmentObject var store: KnowledgeStore
     @EnvironmentObject var settings: AppSettings
     @StateObject private var speechRecognizer = SpeechRecognizer()
+    @FocusState private var isQuestionFocused: Bool
 
     @State private var question: String = ""
     @State private var answer: String = ""
@@ -13,122 +14,197 @@ struct AskView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                // Question input
-                HStack(spacing: 12) {
-                    TextField("Ask about your knowledge...", text: $question, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...4)
-                        .onSubmit { askQuestion() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    inputCard
 
-                    VoiceInputButton(speechRecognizer: speechRecognizer) { transcript in
-                        question = transcript
-                        askQuestion()
+                    if !settings.isAIReady {
+                        infoBanner(
+                            icon: "exclamationmark.triangle.fill",
+                            text: "Add your API key in Settings to use the Ask feature.",
+                            tint: .orange
+                        )
+                    }
+
+                    if store.entries.isEmpty {
+                        infoBanner(
+                            icon: "info.circle.fill",
+                            text: "Add some knowledge first so there's something to search.",
+                            tint: .secondary
+                        )
+                    }
+
+                    if let error = errorMessage {
+                        errorRow(error)
+                    }
+
+                    if !answer.isEmpty {
+                        answerCard
+                    }
+
+                    if !suggestedUpdates.isEmpty {
+                        suggestedSection
                     }
                 }
                 .padding(.horizontal)
-
-                // Ask button
-                Button {
-                    askQuestion()
-                } label: {
-                    Label("Ask", systemImage: "paperplane.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(canAsk ? Color.accentColor : Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                }
-                .disabled(!canAsk)
-                .padding(.horizontal)
-
-                if settings.apiKey.isEmpty {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                        Text("Add your API key in Settings to use the Ask feature.")
-                    }
-                    .font(.caption)
-                    .foregroundColor(.orange)
-                    .padding(.horizontal)
-                }
-
-                if store.entries.isEmpty {
-                    HStack {
-                        Image(systemName: "info.circle")
-                        Text("Add some knowledge first so there's something to search.")
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
-                }
-
-                // Results
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if isLoading {
-                            HStack {
-                                ProgressView()
-                                Text("Thinking...")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                        }
-
-                        if let error = errorMessage {
-                            Text(error)
-                                .foregroundColor(.red)
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                        }
-
-                        if !answer.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Answer", systemImage: "brain.head.profile")
-                                    .font(.headline)
-
-                                Text(answer)
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(12)
-                            }
-                        }
-
-                        if !suggestedUpdates.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Suggested Updates", systemImage: "arrow.triangle.2.circlepath")
-                                    .font(.headline)
-
-                                ForEach(suggestedUpdates) { update in
-                                    SuggestedUpdateCard(update: update) {
-                                        applyUpdate(update)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-
-                Spacer()
+                .padding(.top)
+                .padding(.bottom, 24)
             }
-            .padding(.top)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Ask")
         }
     }
 
+    // MARK: - Subviews
+
+    private var inputCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(
+                "Ask about your knowledge…",
+                text: $question,
+                axis: .vertical
+            )
+            .focused($isQuestionFocused)
+            .lineLimit(1...5)
+            .submitLabel(.send)
+            .onSubmit { askQuestion() }
+            .padding(12)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            HStack(spacing: 12) {
+                Button {
+                    toggleVoice()
+                } label: {
+                    Image(systemName: speechRecognizer.isRecording ? "stop.fill" : "mic.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(speechRecognizer.isRecording ? .red : .accentColor)
+                .accessibilityLabel(speechRecognizer.isRecording ? "Stop recording" : "Start voice input")
+
+                Button {
+                    askQuestion()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                        }
+                        Text(isLoading ? "Thinking…" : "Ask")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canAsk)
+            }
+
+            if speechRecognizer.isRecording {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(.red)
+                        .symbolEffect(.variableColor.iterative, isActive: true)
+                    Text(speechRecognizer.transcript.isEmpty ? "Listening…" : speechRecognizer.transcript)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var answerCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Answer", systemImage: "brain.head.profile")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(answer)
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var suggestedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Suggested Updates", systemImage: "arrow.triangle.2.circlepath")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(suggestedUpdates) { update in
+                SuggestedUpdateCard(update: update) {
+                    applyUpdate(update)
+                }
+            }
+        }
+    }
+
+    private func errorRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+            Spacer()
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func infoBanner(icon: String, text: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    // MARK: - Actions
+
     private var canAsk: Bool {
         !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        && !settings.apiKey.isEmpty
+        && settings.isAIReady
         && !isLoading
+    }
+
+    private func toggleVoice() {
+        if speechRecognizer.isRecording {
+            speechRecognizer.stopRecording()
+            let transcript = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !transcript.isEmpty {
+                question = transcript
+                askQuestion()
+            }
+        } else {
+            isQuestionFocused = false
+            speechRecognizer.startRecording()
+        }
     }
 
     private func askQuestion() {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty, !settings.apiKey.isEmpty else { return }
+        guard !q.isEmpty, settings.isAIReady else { return }
 
+        isQuestionFocused = false
         isLoading = true
         errorMessage = nil
         answer = ""
@@ -184,27 +260,31 @@ struct SuggestedUpdateCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(update.title)
-                .font(.subheadline.bold())
+                .font(.subheadline.weight(.semibold))
 
             Text(update.content)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
                 .lineLimit(3)
 
             if !update.reason.isEmpty {
-                Text("Reason: \(update.reason)")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
+                Text(update.reason)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
 
-            HStack {
-                Button("Apply", action: onApply)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+            Button {
+                onApply()
+            } label: {
+                Label("Apply", systemImage: "checkmark.circle.fill")
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .padding(.top, 4)
         }
         .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

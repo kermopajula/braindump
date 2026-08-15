@@ -4,6 +4,7 @@ struct AddKnowledgeView: View {
     @EnvironmentObject var store: KnowledgeStore
     @EnvironmentObject var settings: AppSettings
     @StateObject private var speechRecognizer = SpeechRecognizer()
+    @FocusState private var isEditorFocused: Bool
 
     @State private var inputText: String = ""
     @State private var showConflictAlert = false
@@ -15,86 +16,31 @@ struct AddKnowledgeView: View {
     @State private var isProcessing = false
     @State private var errorMessage: String?
 
+    private let placeholder = """
+        Type or speak what you want to remember…
+
+        • My hip measurement is 92 cm
+        • Basement keys are in the top drawer of the hallway shelf
+        • To reboot the heating: hold reset 5 seconds, wait for green light
+        """
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                // Input area
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("What do you want to remember?")
-                        .font(.headline)
-
-                    TextEditor(text: $inputText)
-                        .frame(minHeight: 120)
-                        .padding(8)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .overlay(
-                            Group {
-                                if inputText.isEmpty {
-                                    Text("Type or use voice to add knowledge...\n\nExamples:\n• My hip measurement is 92cm\n• Basement keys are in the top drawer of the hallway shelf\n• To reboot the heating: hold reset 5 seconds, wait for green light")
-                                        .foregroundColor(.secondary)
-                                        .padding(12)
-                                        .allowsHitTesting(false)
-                                }
-                            },
-                            alignment: .topLeading
-                        )
-
-                    if speechRecognizer.isRecording {
-                        Text(speechRecognizer.transcript)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                    }
-
-                    if let error = speechRecognizer.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
-                .padding(.horizontal)
-
-                // Voice and Save buttons
-                HStack(spacing: 20) {
-                    VoiceInputButton(speechRecognizer: speechRecognizer) { transcript in
-                        if inputText.isEmpty {
-                            inputText = transcript
-                        } else {
-                            inputText += " " + transcript
-                        }
-                    }
-
-                    Button {
-                        saveKnowledge()
-                    } label: {
-                        Label("Save", systemImage: "square.and.arrow.down")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.accentColor)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
-                }
-                .padding(.horizontal)
-
-                if isProcessing {
-                    ProgressView("Processing...")
-                }
-
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
-                }
-
-                Spacer()
+            VStack(spacing: 0) {
+                editor
+                statusRow
+                actionBar
             }
-            .padding(.top)
-            .navigationTitle("Add Knowledge")
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Add")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isEditorFocused = false
+                    }
+                }
+            }
             .alert("Update Existing Entry?", isPresented: $showConflictAlert) {
                 Button("Update Existing") {
                     if let existing = conflictEntry {
@@ -121,12 +67,142 @@ struct AddKnowledgeView: View {
         }
     }
 
+    // MARK: - Subviews
+
+    private var editor: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $inputText)
+                .focused($isEditorFocused)
+                .scrollContentBackground(.hidden)
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            if inputText.isEmpty {
+                Text(placeholder)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 17)
+                    .padding(.top, 20)
+                    .allowsHitTesting(false)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top)
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        if let error = errorMessage {
+            Label(error, systemImage: "exclamationmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+        } else if speechRecognizer.isRecording {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform")
+                    .foregroundStyle(.red)
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+                Text(speechRecognizer.transcript.isEmpty ? "Listening…" : speechRecognizer.transcript)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+        } else if let voiceError = speechRecognizer.errorMessage {
+            Label(voiceError, systemImage: "mic.slash.fill")
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+        }
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                toggleVoice()
+            } label: {
+                Image(systemName: speechRecognizer.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .tint(speechRecognizer.isRecording ? .red : .accentColor)
+            .accessibilityLabel(speechRecognizer.isRecording ? "Stop recording" : "Start voice input")
+
+            Button {
+                saveKnowledge()
+            } label: {
+                HStack(spacing: 6) {
+                    if isProcessing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    Text(isProcessing ? "Processing…" : "Save")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(cannotSave)
+        }
+        .padding()
+    }
+
+    private var savedConfirmationOverlay: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.green)
+            Text("Saved")
+                .font(.headline)
+        }
+        .padding(28)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    // MARK: - Actions
+
+    private var cannotSave: Bool {
+        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing
+    }
+
+    private func toggleVoice() {
+        if speechRecognizer.isRecording {
+            speechRecognizer.stopRecording()
+            let transcript = speechRecognizer.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !transcript.isEmpty {
+                if inputText.isEmpty {
+                    inputText = transcript
+                } else {
+                    inputText += " " + transcript
+                }
+            }
+        } else {
+            isEditorFocused = false
+            speechRecognizer.startRecording()
+        }
+    }
+
     private func saveKnowledge() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        // If API key available, use AI to process the entry
-        if !settings.apiKey.isEmpty {
+        // Use AI to process the entry when a provider is ready (Apple Intelligence
+        // needs no key; external providers need one).
+        if settings.isAIReady {
             isProcessing = true
             errorMessage = nil
             Task {
@@ -205,19 +281,5 @@ struct AddKnowledgeView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             showSavedConfirmation = false
         }
-    }
-
-    private var savedConfirmationOverlay: some View {
-        VStack {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 50))
-                .foregroundColor(.green)
-            Text("Saved!")
-                .font(.headline)
-        }
-        .padding(30)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .transition(.scale.combined(with: .opacity))
     }
 }

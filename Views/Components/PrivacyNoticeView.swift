@@ -37,15 +37,15 @@ struct PrivacyNoticeView: View {
                         )
 
                         privacyItem(
-                            icon: "key",
-                            title: "Your API Key",
-                            description: "Your API key is stored locally on your device. It is only used to communicate directly with your chosen AI provider (OpenAI or Anthropic)."
+                            icon: "brain.head.profile",
+                            title: "On-Device AI by Default",
+                            description: "BrainDump uses Apple Intelligence's on-device model by default. Your knowledge never leaves your device when answering questions, and no API key is required."
                         )
 
                         privacyItem(
-                            icon: "brain.head.profile",
-                            title: "AI Queries",
-                            description: "When you use the Ask feature, your knowledge base entries are sent to your chosen AI provider to generate answers. This is the only time data leaves your device, and it goes directly to the provider you selected."
+                            icon: "key",
+                            title: "Optional Cloud Providers",
+                            description: "If you want a more capable model, you can switch to OpenAI or Anthropic in Settings and add your own API key. Your key is stored only on this device. When you use the Ask feature with a cloud provider, your knowledge base entries are sent to that provider to generate the answer."
                         )
 
                         privacyItem(

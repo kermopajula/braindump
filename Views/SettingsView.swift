@@ -16,30 +16,37 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("AI Provider") {
+                Section {
                     Picker("Provider", selection: $settings.selectedProvider) {
                         ForEach(AIProvider.allCases) { provider in
                             Text(provider.displayName).tag(provider)
                         }
                     }
 
-                    SecureField("API Key", text: $settings.apiKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                    if settings.selectedProvider.requiresAPIKey {
+                        SecureField("API Key", text: $settings.apiKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
 
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack {
-                            Text("Test Connection")
-                            if isTesting {
-                                Spacer()
-                                ProgressView()
+                        Button {
+                            testConnection()
+                        } label: {
+                            HStack {
+                                Text("Test Connection")
+                                if isTesting {
+                                    Spacer()
+                                    ProgressView()
+                                }
                             }
                         }
+                        .disabled(!settings.isAIReady || isTesting)
                     }
-                    .disabled(settings.apiKey.isEmpty || isTesting)
+                } header: {
+                    Text("AI Provider")
+                } footer: {
+                    Text(providerFooter)
+                        .font(.caption)
                 }
 
                 Section("Knowledge Base") {
@@ -121,6 +128,22 @@ struct SettingsView: View {
             ) { result in
                 handleImport(result)
             }
+        }
+    }
+
+    private var providerFooter: String {
+        switch settings.selectedProvider {
+        case .appleFoundation:
+            if #available(iOS 26.0, *) {
+                if let issue = FoundationModelsClient.availabilityMessage {
+                    return "\(issue) Pick OpenAI or Anthropic and add an API key for cloud AI."
+                }
+                return "Runs on your device using Apple Intelligence — free, private, no API key. If you want a more capable model for complex questions, switch to OpenAI or Anthropic and add your own API key."
+            } else {
+                return "Apple Intelligence requires iOS 26 or later. Pick OpenAI or Anthropic and add an API key."
+            }
+        case .openAI, .anthropic:
+            return "Your key is stored only on this device and used to call \(settings.selectedProvider.displayName) directly. You're billed by the provider for usage."
         }
     }
 
